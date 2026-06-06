@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from scipy import stats
 import urllib.request, io as _io
 
-st.set_page_config(page_title="AI Ultimatum Game — Class Results", layout="wide")
+st.set_page_config(page_title="AI Ultimatum Game — Experiment Result", layout="wide")
 st.title("How does AI distribute the pie?")
 st.caption("Class experiment · ChatGPT · Gemini · Copilot · Claude · 4 scenarios · 4 stake levels")
 
