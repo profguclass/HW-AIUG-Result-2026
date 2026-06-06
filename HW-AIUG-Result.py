@@ -7,7 +7,7 @@ import urllib.request, io as _io
 
 st.set_page_config(page_title="AI Ultimatum Game — Experiment Result", layout="wide")
 st.title("How does AI distribute the pie?")
-st.caption("경기대학교 경제학전공 '게임이론' 실험과제의 종합분석 (2026년 6월) · ChatGPT · Gemini · Copilot · Claude · 4 scenarios · 4 stake levels")
+st.caption("경기대학교 경제학전공 '게임이론' 실험과제의 종합분석 (2026년 6월) · 4 AIs(ChatGPT,Gemini,Copilot,Claude) · 4 scenarios · 4 stake levels")
 
 st.info("""총 74명의 학생들이 수행한 7,616개의 실험관측값을 종합하여 분석한 결과, 네 가지 범용 AI모델은 평균적으로 37%를 제안(Offer)했고 최소수용비율(MAO)은 12%였다. 이는 내쉬균형의 예측(거의 0에 가까운 제안)보다 훨씬 높은 수치로서 전반적으로 AI모델들이 "인간"에 가깝게 행동한 것을 의미한다(Gemini만이 상대적으로 "내쉬균형"에 가까운 경향을 보였다).
 또한 인간응답자 효과(응답자가 AI가 아닌 인간일 때 제안비율이 증가하는 효과)가 나타났는데, 이는 AI모델들이 AI를 상대할 때 덜 관대한 조언을 한다는 선행연구의 결과를 재확인하고 있다.""")
