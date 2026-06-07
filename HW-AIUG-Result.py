@@ -9,11 +9,9 @@ import statsmodels.formula.api as smf
 st.set_page_config(page_title="AI Ultimatum Game — Experiment Result", layout="wide")
 st.title("How does AI distribute the pie?")
 st.caption("경기대학교 경제학전공 '게임이론' 실험과제의 종합분석 (2026년 6월) · 4 AIs(ChatGPT,Gemini,Copilot,Claude) · 4 scenarios · 4 stake levels")
-
 st.info("""총 74명의 학생들이 수행한 7,616개의 실험관측값을 종합하여 분석한 결과, 네 가지 범용 AI모델은 평균적으로 37%를 제안(Offer)했고 최소수용제안(MAO)은 12%였다. 이는 내쉬균형의 예측(거의 0에 가까운 제안)보다 훨씬 높은 수치로서 전반적으로 AI모델들이 "인간"에 가깝게 행동한 것을 의미한다(Gemini만이 상대적으로 "내쉬균형"에 가까운 경향을 보였다).
 또한 인간응답자 효과(응답자가 AI가 아닌 인간일 때 제안비율이 증가하는 효과)가 나타났는데, 이는 AI모델들이 AI를 상대할 때 덜 관대한 조언을 한다는 선행연구의 결과를 재확인하고 있다. 그리고 선행연구에서처럼 금액크기(stake)에 따른 조정이 확인되었다. 네 모델 모두 금액이 ₩10,000에서 ₩10,000,000으로 증가할수록 제안비율을 낮추는 경향을 보였다. 
 끝으로 네 개의 AI모델의 평균 제안비율 간 차이는 통계적으로 무시할 수 없는 수준인데, 이는 어떤 AI모델을 사용하느냐가 파이를 얼마나 나눠주느냐에 실질적이고 유의미한 영향을 미친다는 것을 의미한다.""")
-
 
 DATA_URL = "https://raw.githubusercontent.com/profguclass/HW-AIUG-Result-2026/main/HW-AIUG-ed.xlsx"
 
@@ -270,7 +268,7 @@ with col6:
 st.divider()
 
 # ── Regression Analysis ───────────────────────────────────────────────────────
- 
+
 st.header("Regression Analysis")
 st.markdown("""
 Inspired by Araujo & Uhlig (2026), we run OLS regressions for each AI model.
@@ -278,28 +276,28 @@ All specifications include:
 - **Amt** = log₁₀(stake in KRW) − 1
 - **P_Human** = 1 if Proposer is human, 0 if AI
 - **R_Human** = 1 if Responder is human, 0 if AI
- 
+
 Standard errors are heteroskedasticity-robust (HC1). Significance: \\* p<0.05, \\*\\* p<0.01, \\*\\*\\* p<0.001.
 """)
- 
+
 stake_map = {"1만원": 10, "10만원": 100, "100만원": 1000, "1000만원": 10000}
 df["Amt"]     = df["stake"].map(stake_map).apply(lambda x: np.log10(x) - 1)
 df["P_Human"] = (df["proposer_type"] == "H").astype(int)
 df["R_Human"] = (df["responder_type"] == "H").astype(int)
- 
+
 def stars(p):
     if p < 0.001: return "***"
     if p < 0.01:  return "**"
     if p < 0.05:  return "*"
     return ""
- 
+
 def run_reg(dep_var, formula):
     results = {}
     for m in MODELS:
         sub = df[df["model"] == m].copy()
         results[m] = smf.ols(f"{dep_var} {formula}", data=sub).fit(cov_type="HC1")
     return results
- 
+
 def build_table(results, var_labels):
     rows = []
     for var, label in var_labels.items():
@@ -321,15 +319,15 @@ def build_table(results, var_labels):
         row_r2[m] = f"{results[m].rsquared:.3f}"
     rows += [row_n, row_r2]
     return pd.DataFrame(rows)
- 
+
 # ── Simple (main effects) tables ──────────────────────────────────────────────
 st.subheader("Simple model: main effects only")
 st.markdown("""
 > *Y* ~ **Constant** + **Amt** + **P_Human** + **R_Human**
- 
+
 This is the easiest specification to interpret — no interaction terms.
 """)
- 
+
 FORMULA_SIMPLE = "~ Amt + P_Human + R_Human"
 VAR_LABELS_SIMPLE = {
     "Intercept": "Constant",
@@ -337,10 +335,10 @@ VAR_LABELS_SIMPLE = {
     "P_Human":   "P Human",
     "R_Human":   "R Human",
 }
- 
+
 COEF_EXPLAIN = """
 #### 📖 How to read the coefficients
- 
+
 | Coefficient | What it measures | Positive value means… | Negative value means… |
 |---|---|---|---|
 | **Constant** | Baseline Y when both players are AI and stake = ₩10 (Amt = 0) | High baseline generosity / acceptance threshold | Low baseline — close to rational benchmark |
@@ -348,9 +346,9 @@ COEF_EXPLAIN = """
 | **P Human** | Change in Y when the AI is *advising a human* vs. acting for itself | AI gives more generous advice to humans | AI gives more conservative advice to humans than it keeps for itself |
 | **R Human** | Change in Y when the Responder is human vs. AI | AI is more generous toward / demands more from humans | AI treats human and AI opponents similarly or favors AI |
 """
- 
+
 stab1, stab2 = st.tabs(["Proposer (offer ratio)", "Responder (MAO)"])
- 
+
 with stab1:
     st.markdown("**Dependent variable: offer_ratio**")
     res_s6 = run_reg("offer_ratio", FORMULA_SIMPLE)
@@ -362,7 +360,7 @@ with stab1:
 - **R Human > 0** ✓ Models are more generous when the responder is human (*human responder effect*)
 - **P Human < 0** Models give more conservative advice to humans than they choose for themselves
 """)
- 
+
 with stab2:
     st.markdown("**Dependent variable: mao_ratio**")
     res_s11 = run_reg("mao_ratio", FORMULA_SIMPLE)
@@ -390,18 +388,18 @@ with stab2:
 - **R Human > 0** ✓ Models tell humans to demand more — stricter fairness norms when advising
 - **Constant near 0**: the model behaves close to the rational benchmark as a responder
 """)
- 
+
 st.divider()
- 
+
 # ── Full interaction tables ────────────────────────────────────────────────────
 st.subheader("Full model: triple interaction (Amount × Player Types)")
 st.markdown("""
 > *Y* ~ Amt + P_Human + R_Human + Amt×P_Human + Amt×R_Human + P_Human×R_Human + Amt×P_Human×R_Human
- 
+
 This replicates **Table 6** (Proposer) and **Table 11** (Responder) from Araujo & Uhlig (2026).
 The interaction terms capture whether the effects of stake size and player type *depend on each other*.
 """)
- 
+
 FORMULA_FULL = "~ Amt + P_Human + R_Human + Amt:P_Human + Amt:R_Human + P_Human:R_Human + Amt:P_Human:R_Human"
 VAR_LABELS_FULL = {
     "Intercept":           "Constant",
@@ -413,14 +411,14 @@ VAR_LABELS_FULL = {
     "P_Human:R_Human":     "P Human × R Human",
     "Amt:P_Human:R_Human": "Amt × P Human × R Human",
 }
- 
+
 tab1, tab2 = st.tabs(["Table 6 — Proposer (offer ratio)", "Table 11 — Responder (MAO)"])
- 
+
 with tab1:
     st.markdown("**Dependent variable: offer_ratio**")
     res6 = run_reg("offer_ratio", FORMULA_FULL)
     st.dataframe(build_table(res6, VAR_LABELS_FULL), use_container_width=True, hide_index=True)
- 
+
     st.markdown("---")
     st.markdown("#### 📖 How to read the coefficients")
     st.markdown("""
@@ -441,7 +439,7 @@ with tab1:
 - **R Human > 0** (significant): the model is more generous toward human responders ✓
 - **P Human < 0** (significant): the model gives less generous advice to humans than it keeps for itself
 """)
- 
+
     st.markdown("**Coefficient plot — Proposer** *(error bars = 95% CI; bars crossing 0 are not significant)*")
     selected_model_6 = st.selectbox("Select model", MODELS, key="reg6")
     res = res6[selected_model_6]
@@ -463,12 +461,12 @@ with tab1:
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
     st.plotly_chart(fig, use_container_width=True)
- 
+
 with tab2:
     st.markdown("**Dependent variable: mao_ratio**")
     res11 = run_reg("mao_ratio", FORMULA_FULL)
     st.dataframe(build_table(res11, VAR_LABELS_FULL), use_container_width=True, hide_index=True)
- 
+
     st.markdown("---")
     st.markdown("#### 📖 How to read the coefficients")
     st.markdown("""
@@ -489,7 +487,7 @@ with tab2:
 - **R Human > 0** (significant): the model tells humans to demand a higher minimum — stricter fairness norms when advising
 - **Constant near 0**: the model behaves close to the rational benchmark as a responder in the AI-vs-AI baseline
 """)
- 
+
     st.markdown("**Coefficient plot — Responder** *(error bars = 95% CI; bars crossing 0 are not significant)*")
     selected_model_11 = st.selectbox("Select model", MODELS, key="reg11")
     res = res11[selected_model_11]
@@ -511,40 +509,40 @@ with tab2:
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
     st.plotly_chart(fig, use_container_width=True)
- 
- 
+
+
     # ── Marginal effects of P_Human ──────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### 🔢 Total marginal effect of P_Human")
     st.markdown("""
 In the full model, the effect of **P_Human** is not a single number — it depends on Amt and R_Human:
- 
+
 > **ME(P_Human)** = β(P_Human) + β(Amt×P_Human)·Amt + β(P_Human×R_Human)·R_Human + β(Amt×P_Human×R_Human)·Amt·R_Human
- 
+
 Standard errors are computed via the **delta method** (heteroskedasticity-robust).
 """)
     from scipy import stats as scipy_stats
- 
+
     def me_P(res, amt, r):
         c = np.array([0, 0, 1, 0, amt, 0, r, amt*r])
         me = c @ res.params.values
         se = np.sqrt(c @ res.cov_params().values @ c)
         pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
         return me, se, pv
- 
+
     def me_R(res, amt, p):
         c = np.array([0, 0, 0, 1, 0, amt, p, amt*p])
         me = c @ res.params.values
         se = np.sqrt(c @ res.cov_params().values @ c)
         pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
         return me, se, pv
- 
+
     AMT_VALS   = [0, 1, 2, 3]
     AMT_LABELS = ["\u20a910", "\u20a9100", "\u20a91,000", "\u20a910,000"]
- 
+
     sel6 = st.selectbox("Select model for marginal effects", MODELS, key="me6")
     r6   = res6[sel6]
- 
+
     me_rows = []
     for r_val, r_label in [(0, "AI Responder"), (1, "Human Responder")]:
         for amt, slabel in zip(AMT_VALS, AMT_LABELS):
@@ -559,7 +557,7 @@ Standard errors are computed via the **delta method** (heteroskedasticity-robust
                 "Interpretation": "More conservative advice to humans" if me < 0 else "More generous advice to humans"
             })
     st.dataframe(pd.DataFrame(me_rows), use_container_width=True, hide_index=True)
- 
+
     st.markdown("---")
     st.markdown("#### 🔢 Total marginal effect of R_Human")
     st.markdown("""
@@ -580,12 +578,12 @@ Standard errors are computed via the **delta method** (heteroskedasticity-robust
             })
     st.dataframe(pd.DataFrame(me_rows2), use_container_width=True, hide_index=True)
     st.caption("Significance: * p<0.05  ** p<0.01  *** p<0.001. Standard errors via delta method (HC1).")
- 
+
 with tab2:
     st.markdown("**Dependent variable: mao_ratio**")
     res11 = run_reg("mao_ratio", FORMULA_FULL)
     st.dataframe(build_table(res11, VAR_LABELS_FULL), use_container_width=True, hide_index=True)
- 
+
     st.markdown("---")
     st.markdown("#### \U0001f4d6 How to read the coefficients")
     st.markdown("""
@@ -606,7 +604,7 @@ with tab2:
 - **R Human > 0** (significant): the model tells humans to demand more — stricter fairness norms when advising
 - **Constant near 0**: close to the rational benchmark as a responder in the AI-vs-AI baseline
 """)
- 
+
     st.markdown("**Coefficient plot — Responder** *(error bars = 95% CI; bars crossing 0 are not significant)*")
     selected_model_11 = st.selectbox("Select model", MODELS, key="reg11")
     res = res11[selected_model_11]
@@ -628,7 +626,7 @@ with tab2:
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
     st.plotly_chart(fig, use_container_width=True)
- 
+
     # ── Marginal effects (MAO) ────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### \U0001f522 Total marginal effect of P_Human")
@@ -637,7 +635,7 @@ with tab2:
 """)
     sel11 = st.selectbox("Select model for marginal effects", MODELS, key="me11")
     r11   = res11[sel11]
- 
+
     me_rows3 = []
     for r_val, r_label in [(0, "AI Responder"), (1, "Human Responder")]:
         for amt, slabel in zip(AMT_VALS, AMT_LABELS):
@@ -652,7 +650,7 @@ with tab2:
                 "Interpretation": "AI advises humans to demand more" if me > 0 else "AI advises humans to accept lower"
             })
     st.dataframe(pd.DataFrame(me_rows3), use_container_width=True, hide_index=True)
- 
+
     st.markdown("---")
     st.markdown("#### \U0001f522 Total marginal effect of R_Human")
     st.markdown("""
