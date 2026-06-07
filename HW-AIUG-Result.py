@@ -4,14 +4,19 @@ import streamlit as st
 import plotly.graph_objects as go
 from scipy import stats
 import urllib.request, io as _io
+import statsmodels.formula.api as smf
 
-st.set_page_config(page_title="AI Ultimatum Game — Experiment Result", layout="wide")
+st.set_page_config(page_title="AI Ultimatum Game — Class Results", layout="wide")
 st.title("How does AI distribute the pie?")
-st.caption("경기대학교 경제학전공 '게임이론' 실험과제의 종합분석 (2026년 6월) · 4 AIs(ChatGPT,Gemini,Copilot,Claude) · 4 scenarios · 4 stake levels")
+st.caption("Class experiment · ChatGPT · Gemini · Copilot · Claude · 4 scenarios · 4 stake levels")
 
-st.info("""총 74명의 학생들이 수행한 7,616개의 실험관측값을 종합하여 분석한 결과, 네 가지 범용 AI모델은 평균적으로 37%를 제안(Offer)했고 최소수용제안(MAO)은 12%였다. 이는 내쉬균형의 예측(거의 0에 가까운 제안)보다 훨씬 높은 수치로서 전반적으로 AI모델들이 "인간"에 가깝게 행동한 것을 의미한다(Gemini만이 상대적으로 "내쉬균형"에 가까운 경향을 보였다).
-또한 인간응답자 효과(응답자가 AI가 아닌 인간일 때 제안비율이 증가하는 효과)가 나타났는데, 이는 AI모델들이 AI를 상대할 때 덜 관대한 조언을 한다는 선행연구의 결과를 재확인하고 있다. 그리고 선행연구에서처럼 금액크기(stake)에 따른 조정이 확인되었다. 네 모델 모두 금액이 ₩10,000에서 ₩10,000,000으로 증가할수록 제안비율을 낮추는 경향을 보였다. 
-끝으로 네 개의 AI모델의 평균 제안비율 간 차이는 통계적으로 무시할 수 없는 수준인데, 이는 어떤 AI모델을 사용하느냐가 파이를 얼마나 나눠주느냐에 실질적이고 유의미한 영향을 미친다는 것을 의미한다.""")
+st.info("""
+74명의 학생으로부터 수집된 7,616개의 관측값을 분석한 내용을 시각화하여 표현한 사이트이니 잘 살펴보기 바랍니다.
+
+이 네 가지 상용 AI 모델은 평균적으로 파이의 37%를 제안했는데, 이는 내쉬균형의 예측(거의 0에 가까운 제안)보다 훨씬 높은 수치로서 전반적으로 모델들이 "인간"에 가깝게 행동한 것으로 보이며, Gemini만이 상대적으로 "내쉬균형"에 가까운 경향을 보였습니다.
+
+또한 인간응답자 효과(응답자가 AI가 아닌 인간일 때 제안 비율이 증가하는 효과)가 나타났는데, 이는 AI를 상대할 때 모델들이 덜 관대한 조언을 한다는 선행연구의 결과를 재확인합니다.
+""")
 
 DATA_URL = "https://raw.githubusercontent.com/profguclass/HW-AIUG-Result-2026/main/HW-AIUG-ed.xlsx"
 
@@ -264,3 +269,182 @@ with col6:
         "Model":     MODELS,
         "Pearson r": [f"{corrs[m]:.3f}" for m in MODELS],
     }), use_container_width=True, hide_index=True)
+
+st.divider()
+
+# ── Regression: Tables 6 & 11 replication ────────────────────────────────────
+
+st.header("Regression Analysis")
+st.markdown("""
+Replication of **Table 6** (Proposer) and **Table 11** (Responder) from Araujo & Uhlig (2026),
+using the triple interaction specification:
+
+> *Y* ~ Amt + P_Human + R_Human + Amt×P_Human + Amt×R_Human + P_Human×R_Human + Amt×P_Human×R_Human
+
+where **Amt** = log₁₀(stake in KRW) − 1, **P_Human** = 1 if Proposer is human, **R_Human** = 1 if Responder is human.
+Standard errors are heteroskedasticity-robust (HC1). Significance: \\* p<0.05, \\*\\* p<0.01, \\*\\*\\* p<0.001.
+""")
+
+stake_map = {"1만원": 10, "10만원": 100, "100만원": 1000, "1000만원": 10000}
+df["Amt"]     = df["stake"].map(stake_map).apply(lambda x: np.log10(x) - 1)
+df["P_Human"] = (df["proposer_type"] == "H").astype(int)
+df["R_Human"] = (df["responder_type"] == "H").astype(int)
+
+FORMULA = "~ Amt + P_Human + R_Human + Amt:P_Human + Amt:R_Human + P_Human:R_Human + Amt:P_Human:R_Human"
+VAR_LABELS = {
+    "Intercept":              "Constant",
+    "Amt":                    "Amt",
+    "P_Human":                "P Human",
+    "R_Human":                "R Human",
+    "Amt:P_Human":            "Amt × P Human",
+    "Amt:R_Human":            "Amt × R Human",
+    "P_Human:R_Human":        "P Human × R Human",
+    "Amt:P_Human:R_Human":    "Amt × P Human × R Human",
+}
+
+def run_reg(dep_var):
+    results = {}
+    for m in MODELS:
+        sub = df[df["model"] == m].copy()
+        res = smf.ols(f"{dep_var} {FORMULA}", data=sub).fit(cov_type="HC1")
+        results[m] = res
+    return results
+
+def stars(p):
+    if p < 0.001: return "***"
+    if p < 0.01:  return "**"
+    if p < 0.05:  return "*"
+    return ""
+
+def build_table(results):
+    rows = []
+    for var, label in VAR_LABELS.items():
+        # coefficient row
+        row_coef = {"Variable": label}
+        for m in MODELS:
+            res = results[m]
+            if var in res.params:
+                c = res.params[var]
+                p = res.pvalues[var]
+                row_coef[m] = f"{c:.4f}{stars(p)}"
+            else:
+                row_coef[m] = "—"
+        rows.append(row_coef)
+        # SE row
+        row_se = {"Variable": ""}
+        for m in MODELS:
+            res = results[m]
+            if var in res.bse:
+                row_se[m] = f"({res.bse[var]:.4f})"
+            else:
+                row_se[m] = ""
+        rows.append(row_se)
+    # N and R2
+    row_n  = {"Variable": "N"}
+    row_r2 = {"Variable": "R²"}
+    for m in MODELS:
+        res = results[m]
+        row_n[m]  = str(int(res.nobs))
+        row_r2[m] = f"{res.rsquared:.3f}"
+    rows += [row_n, row_r2]
+    return pd.DataFrame(rows)
+
+tab1, tab2 = st.tabs(["Table 6 — Proposer (offer ratio)", "Table 11 — Responder (MAO)"])
+
+with tab1:
+    st.markdown("**Dependent variable: offer_ratio** — Triple interaction (Amount × Player Types)")
+    res6 = run_reg("offer_ratio")
+    tbl6 = build_table(res6)
+    st.dataframe(tbl6, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.markdown("#### 📖 How to read the coefficients")
+    st.markdown("""
+| Coefficient | What it measures | Example interpretation |
+|---|---|---|
+| **Constant** | Baseline offer ratio when both players are AI and stake is ₩10 (Amt = 0) | ChatGPT starts at 48.5% in the AI-vs-AI baseline |
+| **Amt** | How offer ratio changes as stake increases (each unit = 10× increase in stake) | A negative value means the model offers less as stakes rise — *stake-dependent rationality* |
+| **P Human** | Change in offer ratio when the Proposer is a *human asking for advice* (vs. AI deciding for itself) | A negative value means the model gives more conservative advice to humans than it would choose for itself |
+| **R Human** | Change in offer ratio when the Responder is human (vs. AI) | A positive value means the model offers more generously when facing a human — the *human responder effect* |
+| **Amt × P Human** | Does the stake effect differ depending on whether the Proposer is human? | If negative, the model gives even more conservative advice to humans at higher stakes |
+| **Amt × R Human** | Does the stake effect differ depending on whether the Responder is human? | If negative, the human-responder generosity shrinks at higher stakes |
+| **P Human × R Human** | Extra adjustment when *both* players are human (interaction on top of P Human and R Human) | Captures whether the model changes behavior specifically in the human-vs-human scenario |
+| **Amt × P Human × R Human** | Does the human-human interaction effect itself vary with stake size? | The most complex term — significant only for some models |
+""")
+    st.info("""
+**Key findings to look for:**
+- **Amt < 0** (significant): the model is more rational at higher stakes ✓
+- **R Human > 0** (significant): the model is more generous toward human responders ✓
+- **P Human < 0** (significant): the model gives less generous advice to humans than it keeps for itself — suggesting it applies different norms when advising vs. acting autonomously
+""")
+
+    st.markdown("**Coefficient plot — Proposer** *(error bars = 95% confidence interval; bars crossing 0 are not significant)*")
+    selected_model_6 = st.selectbox("Select model", MODELS, key="reg6")
+    res = res6[selected_model_6]
+    vars_to_plot = [v for v in VAR_LABELS if v != "Intercept" and v in res.params]
+    coefs  = [res.params[v] for v in vars_to_plot]
+    ci_lo  = [res.conf_int().loc[v, 0] for v in vars_to_plot]
+    ci_hi  = [res.conf_int().loc[v, 1] for v in vars_to_plot]
+    labels = [VAR_LABELS[v] for v in vars_to_plot]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=coefs, y=labels, mode="markers",
+        marker=dict(size=10, color=COLORS[selected_model_6]),
+        error_x=dict(type="data",
+                     arrayminus=[c - l for c, l in zip(coefs, ci_lo)],
+                     array=[h - c for c, h in zip(coefs, ci_hi)],
+                     color=COLORS[selected_model_6])
+    ))
+    fig.add_vline(x=0, line_dash="dot", line_color="gray")
+    fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
+                      margin=dict(t=10, b=10), height=320)
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab2:
+    st.markdown("**Dependent variable: mao_ratio** — Triple interaction (Amount × Player Types)")
+    res11 = run_reg("mao_ratio")
+    tbl11 = build_table(res11)
+    st.dataframe(tbl11, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.markdown("#### 📖 How to read the coefficients")
+    st.markdown("""
+| Coefficient | What it measures | Example interpretation |
+|---|---|---|
+| **Constant** | Baseline MAO when both players are AI and stake is ₩10 (Amt = 0) | How demanding the AI is as a responder in the pure AI-vs-AI baseline |
+| **Amt** | How MAO changes as stake increases | A negative value means the model accepts a smaller share at higher stakes — more rational as amounts grow |
+| **P Human** | Change in MAO when the Proposer is human | Does the model demand more or less when a human is making the offer? |
+| **R Human** | Change in MAO when the Responder is human (i.e., the AI is advising a human on what to accept) | A positive value means the model tells humans to demand a higher minimum — applying stricter fairness norms when advising |
+| **Amt × P Human** | Does the stake effect on MAO differ when Proposer is human? | Captures whether the "be more rational at higher stakes" pattern changes depending on who is proposing |
+| **Amt × R Human** | Does the stake effect on MAO differ when Responder is human? | If negative, the AI advises humans to lower their threshold more sharply at higher stakes |
+| **P Human × R Human** | Extra adjustment when both players are human | Does the AI change its acceptance advice specifically in the human-vs-human scenario? |
+| **Amt × P Human × R Human** | Triple interaction: stake effect in the human-vs-human scenario | The most nuanced term — how stake sensitivity in the human-vs-human case differs from all other cases |
+""")
+    st.info("""
+**Key findings to look for:**
+- **Amt < 0** (significant): the model is more willing to accept low offers at higher stakes — consistent with rational theory
+- **R Human > 0** (significant): the model tells humans to demand a *higher* minimum than it would accept for itself — it applies stricter fairness norms when advising humans
+- **Constant near 0**: GPT-5 mini in the paper is close to 0, meaning near-full rationality as a responder in the baseline case. Compare how your models perform on this benchmark.
+""")
+
+    st.markdown("**Coefficient plot — Responder** *(error bars = 95% confidence interval; bars crossing 0 are not significant)*")
+    selected_model_11 = st.selectbox("Select model", MODELS, key="reg11")
+    res = res11[selected_model_11]
+    vars_to_plot = [v for v in VAR_LABELS if v != "Intercept" and v in res.params]
+    coefs  = [res.params[v] for v in vars_to_plot]
+    ci_lo  = [res.conf_int().loc[v, 0] for v in vars_to_plot]
+    ci_hi  = [res.conf_int().loc[v, 1] for v in vars_to_plot]
+    labels = [VAR_LABELS[v] for v in vars_to_plot]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=coefs, y=labels, mode="markers",
+        marker=dict(size=10, color=COLORS[selected_model_11]),
+        error_x=dict(type="data",
+                     arrayminus=[c - l for c, l in zip(coefs, ci_lo)],
+                     array=[h - c for c, h in zip(coefs, ci_hi)],
+                     color=COLORS[selected_model_11])
+    ))
+    fig.add_vline(x=0, line_dash="dot", line_color="gray")
+    fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
+                      margin=dict(t=10, b=10), height=320)
+    st.plotly_chart(fig, use_container_width=True)
