@@ -87,7 +87,7 @@ with col1:
     fig.update_layout(yaxis=dict(tickformat=".0%", range=[0,0.62], title="Mean offer ratio"),
                       xaxis_title="", margin=dict(t=30,b=10), height=300,
                       title="Mean offer ratio by model")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_mean_offer")
 
 with col2:
     maos = df.groupby("model")["mao_ratio"].mean().reindex(MODELS)
@@ -99,7 +99,7 @@ with col2:
     fig.update_layout(yaxis=dict(tickformat=".0%", range=[0,0.3], title="Mean MAO"),
                       xaxis_title="", margin=dict(t=30,b=10), height=300,
                       title="Mean minimum acceptable offer (MAO) by model")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_mean_mao")
 
 # ── SD comparison chart ───────────────────────────────────────────────────────
 st.subheader("Variability (SD) of offer ratio and MAO by model")
@@ -121,7 +121,7 @@ fig.add_trace(go.Bar(
 fig.update_layout(barmode="group",
                   yaxis=dict(tickformat=".0%", range=[0,0.35], title="Standard deviation"),
                   xaxis_title="", legend_title="", margin=dict(t=10,b=10), height=320)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="chart_sd_variability")
 
 # ── Offer by model x stake ────────────────────────────────────────────────────
 st.subheader("Mean offer ratio by model and stake level  (stake-dependent rationality)")
@@ -138,7 +138,7 @@ fig.update_layout(barmode="group",
                   yaxis=dict(tickformat=".0%", range=[0,0.65], title="Mean offer ratio"),
                   xaxis_title="Stake", legend_title="Model",
                   margin=dict(t=10,b=10), height=360)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="chart_offer_by_stake")
 
 # ── Scenario & human-responder effect ─────────────────────────────────────────
 col3, col4 = st.columns(2)
@@ -154,7 +154,7 @@ with col3:
     ))
     fig.update_layout(yaxis=dict(tickformat=".0%", range=[0,0.6], title="Mean offer ratio"),
                       xaxis_title="", margin=dict(t=10,b=10), height=320)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_offer_by_scenario")
 
 with col4:
     st.subheader("Human responder effect (Δ vs AI responder)")
@@ -172,7 +172,7 @@ with col4:
     fig.add_hline(y=0, line_dash="dot", line_color="gray")
     fig.update_layout(yaxis=dict(tickformat=".0%", range=[-0.08,0.32], title="Δ offer ratio"),
                       xaxis_title="", margin=dict(t=10,b=10), height=320)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_human_responder_effect")
 
 # ── Detailed: scenario x model ───────────────────────────────────────────────
 st.subheader("Mean offer ratio by scenario, by AI model")
@@ -193,7 +193,7 @@ fig.update_layout(barmode="group",
                   yaxis=dict(tickformat=".0%", range=[0,0.7], title="Mean offer ratio"),
                   xaxis_title="", legend_title="Model",
                   margin=dict(t=10,b=10), height=360)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="chart_scenario_by_model")
 
 # ── Behavioral mode stacked bar ───────────────────────────────────────────────
 st.subheader("Behavioral mode distribution by model")
@@ -215,7 +215,7 @@ fig.update_layout(barmode="stack",
                   xaxis=dict(ticksuffix="%", range=[0,100], title="Share of observations (%)"),
                   yaxis_title="", legend_title="Mode",
                   margin=dict(t=10,b=10), height=280)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, key="chart_behavioral_mode")
 
 # ── Detailed: behavioral mode by scenario ────────────────────────────────────
 st.subheader("Behavioral mode distribution by model, by scenario")
@@ -239,7 +239,7 @@ for sc in SCENARIOS_ORDERED:
                       xaxis=dict(ticksuffix="%", range=[0,100], title="Share of observations (%)"),
                       yaxis_title="", showlegend=False,
                       margin=dict(t=5,b=5), height=220)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_behavioral_by_scenario")
 
 st.divider()
 
@@ -460,7 +460,7 @@ with tab1:
     fig.add_vline(x=0, line_dash="dot", line_color="gray")
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_coef_proposer")
 
 with tab2:
     st.markdown("**Dependent variable: mao_ratio**")
@@ -508,7 +508,7 @@ with tab2:
     fig.add_vline(x=0, line_dash="dot", line_color="gray")
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_coef_responder_t1")
 
 
     # ── Marginal effects of P_Human ──────────────────────────────────────────
@@ -625,7 +625,7 @@ with tab2:
     fig.add_vline(x=0, line_dash="dot", line_color="gray")
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_coef_responder_t2")
 
     # ── Marginal effects (MAO) ────────────────────────────────────────────────
     st.markdown("---")
