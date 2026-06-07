@@ -414,35 +414,116 @@ VAR_LABELS_FULL = {
 
 tab1, tab2 = st.tabs(["Table 6 — Proposer (offer ratio)", "Table 11 — Responder (MAO)"])
 
+# ── shared helper functions ───────────────────────────────────────────────────
+from scipy import stats as scipy_stats
+
+def me_P(res, amt, r):
+    c = np.array([0, 0, 1, 0, amt, 0, r, amt*r])
+    me = c @ res.params.values
+    se = np.sqrt(c @ res.cov_params().values @ c)
+    pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
+    return me, se, pv
+
+def me_R(res, amt, p):
+    c = np.array([0, 0, 0, 1, 0, amt, p, amt*p])
+    me = c @ res.params.values
+    se = np.sqrt(c @ res.cov_params().values @ c)
+    pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
+    return me, se, pv
+
+AMT_VALS   = [0, 1, 2, 3]
+AMT_LABELS = ["\u20a910", "\u20a9100", "\u20a91,000", "\u20a910,000"]
+
+def stars(p):
+    return "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else ""
+
+def show_me_tables(res, dep="offer"):
+    # ── ME of P_Human ─────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("#### \U0001f522 Total marginal effect of P_Human")
+    st.markdown("""
+The coefficient on **P_Human** alone does not capture its full effect — it must be combined with its interaction terms:
+
+> **ME(P_Human)** = β(P_Human) + β(Amt×P_Human)·Amt + β(P_Human×R_Human)·R_Human + β(Amt×P_Human×R_Human)·Amt·R_Human
+
+The table below evaluates this total effect at each combination of stake level and responder type, with **delta-method** standard errors.
+""")
+    rows = []
+    for r_val, r_label in [(0, "AI Responder"), (1, "Human Responder")]:
+        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
+            me, se, pv = me_P(res, amt, r_val)
+            s = stars(pv)
+            if dep == "offer":
+                interp = "More conservative advice to humans" if me < 0 else "More generous advice to humans"
+            else:
+                interp = "AI advises humans to accept lower offers" if me < 0 else "AI advises humans to demand more"
+            rows.append({
+                "Responder type": r_label,
+                "Stake":          slabel,
+                "ME of P_Human":  f"{me:+.4f}{s}",
+                "Std. Error":     f"({se:.4f})",
+                "p-value":        f"{pv:.3f}",
+                "Interpretation": interp
+            })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ── ME of R_Human ─────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("#### \U0001f522 Total marginal effect of R_Human")
+    st.markdown("""
+> **ME(R_Human)** = β(R_Human) + β(Amt×R_Human)·Amt + β(P_Human×R_Human)·P_Human + β(Amt×P_Human×R_Human)·Amt·P_Human
+""")
+    rows2 = []
+    for p_val, p_label in [(0, "AI Proposer"), (1, "Human Proposer")]:
+        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
+            me, se, pv = me_R(res, amt, p_val)
+            s = stars(pv)
+            if dep == "offer":
+                interp = "More generous toward human responder" if me > 0 else "Less generous toward human responder"
+            else:
+                interp = "Higher acceptance threshold when advising humans" if me > 0 else "Lower threshold when advising humans"
+            rows2.append({
+                "Proposer type":  p_label,
+                "Stake":          slabel,
+                "ME of R_Human":  f"{me:+.4f}{s}",
+                "Std. Error":     f"({se:.4f})",
+                "p-value":        f"{pv:.3f}",
+                "Interpretation": interp
+            })
+    st.dataframe(pd.DataFrame(rows2), use_container_width=True, hide_index=True)
+    st.caption("Significance: * p<0.05  ** p<0.01  *** p<0.001. Standard errors via delta method (HC1).")
+
+# ── TAB 1: Proposer ───────────────────────────────────────────────────────────
 with tab1:
     st.markdown("**Dependent variable: offer_ratio**")
     res6 = run_reg("offer_ratio", FORMULA_FULL)
     st.dataframe(build_table(res6, VAR_LABELS_FULL), use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.markdown("#### 📖 How to read the coefficients")
+    st.markdown("#### \U0001f4d6 How to read the coefficients")
     st.markdown("""
 | Coefficient | What it measures | Example interpretation |
 |---|---|---|
-| **Constant** | Baseline offer ratio when both players are AI and stake is ₩10 (Amt = 0) | ChatGPT starts at 48.5% in the AI-vs-AI baseline |
-| **Amt** | How offer ratio changes as stake increases (each unit = 10× increase in stake) | A negative value means the model offers less as stakes rise — *stake-dependent rationality* |
-| **P Human** | Change in offer ratio when the Proposer is a *human asking for advice* (vs. AI deciding for itself) | A negative value means the model gives more conservative advice to humans than it would choose for itself |
-| **R Human** | Change in offer ratio when the Responder is human (vs. AI) | A positive value means the model offers more generously when facing a human — the *human responder effect* |
-| **Amt × P Human** | Does the stake effect differ depending on whether the Proposer is human? | If negative, the model gives even more conservative advice to humans at higher stakes |
-| **Amt × R Human** | Does the stake effect differ depending on whether the Responder is human? | If negative, the human-responder generosity shrinks at higher stakes |
-| **P Human × R Human** | Extra adjustment when *both* players are human | Captures whether the model changes behavior specifically in the human-vs-human scenario |
-| **Amt × P Human × R Human** | Does the human-human interaction effect itself vary with stake size? | The most complex term — significant only for some models |
+| **Constant** | Baseline offer ratio when both players are AI and stake = \u20a910 (Amt = 0) | The AI\'s generosity in the pure AI-vs-AI baseline |
+| **Amt** | Change per 10× increase in stake | Negative = more rational at higher stakes (*stake-dependent rationality*) |
+| **P Human** | Baseline change when Proposer is human (at Amt=0, R=AI) | Negative = AI gives more conservative advice to humans than it chooses for itself |
+| **R Human** | Baseline change when Responder is human (at Amt=0, P=AI) | Positive = AI offers more generously toward humans (*human responder effect*) |
+| **Amt \u00d7 P Human** | Does the stake effect change when Proposer is human? | If negative, AI gives even more conservative advice at higher stakes |
+| **Amt \u00d7 R Human** | Does the stake effect change when Responder is human? | If negative, the human-responder generosity shrinks at higher stakes |
+| **P Human \u00d7 R Human** | Extra shift when *both* players are human (at Amt=0) | Specific adjustment for the human-vs-human scenario |
+| **Amt \u00d7 P Human \u00d7 R Human** | Does the human-human adjustment change with stake? | The most complex term — captures stake sensitivity specific to human-vs-human |
 """)
     st.info("""
 **Key findings to look for:**
-- **Amt < 0** (significant): the model is more rational at higher stakes ✓
-- **R Human > 0** (significant): the model is more generous toward human responders ✓
-- **P Human < 0** (significant): the model gives less generous advice to humans than it keeps for itself
+- **Amt < 0** (significant): AI is more rational at higher stakes \u2713
+- **R Human > 0** (significant): AI is more generous toward human responders \u2713
+- **P Human < 0** (significant): AI gives more conservative advice to humans than it acts for itself
+\n\u26a0\ufe0f The coefficient on P_Human alone is only the effect *at \u20a910 with an AI responder*. See the marginal effects tables below for the full picture.
 """)
 
-    st.markdown("**Coefficient plot — Proposer** *(error bars = 95% CI; bars crossing 0 are not significant)*")
-    selected_model_6 = st.selectbox("Select model", MODELS, key="coefplot_proposer")
-    res = res6[selected_model_6]
+    st.markdown("**Coefficient plot** *(error bars = 95% CI; bars crossing 0 are not significant)*")
+    sel6_plot = st.selectbox("Select model", MODELS, key="coefplot_proposer")
+    res = res6[sel6_plot]
     vars_to_plot = [v for v in VAR_LABELS_FULL if v != "Intercept" and v in res.params]
     coefs = [res.params[v] for v in vars_to_plot]
     ci_lo = [res.conf_int().loc[v, 0] for v in vars_to_plot]
@@ -451,134 +532,24 @@ with tab1:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=coefs, y=labels, mode="markers",
-        marker=dict(size=10, color=COLORS[selected_model_6]),
+        marker=dict(size=10, color=COLORS[sel6_plot]),
         error_x=dict(type="data",
                      arrayminus=[c - l for c, l in zip(coefs, ci_lo)],
                      array=[h - c for c, h in zip(coefs, ci_hi)],
-                     color=COLORS[selected_model_6])
+                     color=COLORS[sel6_plot])
     ))
     fig.add_vline(x=0, line_dash="dot", line_color="gray")
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
     st.plotly_chart(fig, use_container_width=True, key="chart_coef_proposer")
 
-with tab2:
-    st.markdown("**Dependent variable: mao_ratio**")
-    res11 = run_reg("mao_ratio", FORMULA_FULL)
-    st.dataframe(build_table(res11, VAR_LABELS_FULL), use_container_width=True, hide_index=True)
-
     st.markdown("---")
-    st.markdown("#### 📖 How to read the coefficients")
-    st.markdown("""
-| Coefficient | What it measures | Example interpretation |
-|---|---|---|
-| **Constant** | Baseline MAO when both players are AI and stake is ₩10 (Amt = 0) | How demanding the AI is as a responder in the pure AI-vs-AI baseline |
-| **Amt** | How MAO changes as stake increases | A negative value means the model accepts a smaller share at higher stakes — more rational as amounts grow |
-| **P Human** | Change in MAO when the Proposer is human | Does the model demand more or less when a human is making the offer? |
-| **R Human** | Change in MAO when the Responder is human (i.e., AI is advising a human on what to accept) | A positive value means the model tells humans to demand a higher minimum |
-| **Amt × P Human** | Does the stake effect on MAO differ when Proposer is human? | Captures whether the "be more rational at higher stakes" pattern changes depending on who is proposing |
-| **Amt × R Human** | Does the stake effect on MAO differ when Responder is human? | If negative, the AI advises humans to lower their threshold more sharply at higher stakes |
-| **P Human × R Human** | Extra adjustment when both players are human | Does the AI change its acceptance advice specifically in the human-vs-human scenario? |
-| **Amt × P Human × R Human** | Triple interaction: stake effect in the human-vs-human scenario | How stake sensitivity in the human-vs-human case differs from all other cases |
-""")
-    st.info("""
-**Key findings to look for:**
-- **Amt < 0** (significant): the model is more willing to accept low offers at higher stakes ✓
-- **R Human > 0** (significant): the model tells humans to demand a higher minimum — stricter fairness norms when advising
-- **Constant near 0**: the model behaves close to the rational benchmark as a responder in the AI-vs-AI baseline
-""")
+    st.markdown("#### \U0001f4ca Marginal effects (accounting for all interaction terms)")
+    st.markdown("Select a model to see the **total** effect of each player-type variable across all stake levels and opponent types.")
+    sel6_me = st.selectbox("Select model for marginal effects", MODELS, key="me6")
+    show_me_tables(res6[sel6_me], dep="offer")
 
-    st.markdown("**Coefficient plot — Responder** *(error bars = 95% CI; bars crossing 0 are not significant)*")
-    sel_m11_tab1 = st.selectbox("Select model", MODELS, key="coefplot_responder_tab1")
-    res = res11[sel_m11_tab1]
-    vars_to_plot = [v for v in VAR_LABELS_FULL if v != "Intercept" and v in res.params]
-    coefs = [res.params[v] for v in vars_to_plot]
-    ci_lo = [res.conf_int().loc[v, 0] for v in vars_to_plot]
-    ci_hi = [res.conf_int().loc[v, 1] for v in vars_to_plot]
-    labels = [VAR_LABELS_FULL[v] for v in vars_to_plot]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=coefs, y=labels, mode="markers",
-        marker=dict(size=10, color=COLORS[sel_m11_tab1]),
-        error_x=dict(type="data",
-                     arrayminus=[c - l for c, l in zip(coefs, ci_lo)],
-                     array=[h - c for c, h in zip(coefs, ci_hi)],
-                     color=COLORS[sel_m11_tab1])
-    ))
-    fig.add_vline(x=0, line_dash="dot", line_color="gray")
-    fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
-                      margin=dict(t=10, b=10), height=340)
-    st.plotly_chart(fig, use_container_width=True, key="chart_coef_responder_t1")
-
-
-    # ── Marginal effects of P_Human ──────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### 🔢 Total marginal effect of P_Human")
-    st.markdown("""
-In the full model, the effect of **P_Human** is not a single number — it depends on Amt and R_Human:
-
-> **ME(P_Human)** = β(P_Human) + β(Amt×P_Human)·Amt + β(P_Human×R_Human)·R_Human + β(Amt×P_Human×R_Human)·Amt·R_Human
-
-Standard errors are computed via the **delta method** (heteroskedasticity-robust).
-""")
-    from scipy import stats as scipy_stats
-
-    def me_P(res, amt, r):
-        c = np.array([0, 0, 1, 0, amt, 0, r, amt*r])
-        me = c @ res.params.values
-        se = np.sqrt(c @ res.cov_params().values @ c)
-        pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
-        return me, se, pv
-
-    def me_R(res, amt, p):
-        c = np.array([0, 0, 0, 1, 0, amt, p, amt*p])
-        me = c @ res.params.values
-        se = np.sqrt(c @ res.cov_params().values @ c)
-        pv = 2 * scipy_stats.t.sf(abs(me/se), df=res.df_resid)
-        return me, se, pv
-
-    AMT_VALS   = [0, 1, 2, 3]
-    AMT_LABELS = ["\u20a910", "\u20a9100", "\u20a91,000", "\u20a910,000"]
-
-    sel6 = st.selectbox("Select model for marginal effects", MODELS, key="me6")
-    r6   = res6[sel6]
-
-    me_rows = []
-    for r_val, r_label in [(0, "AI Responder"), (1, "Human Responder")]:
-        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
-            me, se, pv = me_P(r6, amt, r_val)
-            s = "***" if pv < 0.001 else "**" if pv < 0.01 else "*" if pv < 0.05 else ""
-            me_rows.append({
-                "Responder type": r_label,
-                "Stake":          slabel,
-                "ME of P_Human":  f"{me:+.4f}{s}",
-                "Std. Error":     f"({se:.4f})",
-                "p-value":        f"{pv:.3f}",
-                "Interpretation": "More conservative advice to humans" if me < 0 else "More generous advice to humans"
-            })
-    st.dataframe(pd.DataFrame(me_rows), use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.markdown("#### 🔢 Total marginal effect of R_Human")
-    st.markdown("""
-> **ME(R_Human)** = β(R_Human) + β(Amt×R_Human)·Amt + β(P_Human×R_Human)·P_Human + β(Amt×P_Human×R_Human)·Amt·P_Human
-""")
-    me_rows2 = []
-    for p_val, p_label in [(0, "AI Proposer"), (1, "Human Proposer")]:
-        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
-            me, se, pv = me_R(r6, amt, p_val)
-            s = "***" if pv < 0.001 else "**" if pv < 0.01 else "*" if pv < 0.05 else ""
-            me_rows2.append({
-                "Proposer type":  p_label,
-                "Stake":          slabel,
-                "ME of R_Human":  f"{me:+.4f}{s}",
-                "Std. Error":     f"({se:.4f})",
-                "p-value":        f"{pv:.3f}",
-                "Interpretation": "More generous toward human responder" if me > 0 else "Less generous toward human responder"
-            })
-    st.dataframe(pd.DataFrame(me_rows2), use_container_width=True, hide_index=True)
-    st.caption("Significance: * p<0.05  ** p<0.01  *** p<0.001. Standard errors via delta method (HC1).")
-
+# ── TAB 2: Responder ──────────────────────────────────────────────────────────
 with tab2:
     st.markdown("**Dependent variable: mao_ratio**")
     res11 = run_reg("mao_ratio", FORMULA_FULL)
@@ -589,25 +560,26 @@ with tab2:
     st.markdown("""
 | Coefficient | What it measures | Example interpretation |
 |---|---|---|
-| **Constant** | Baseline MAO when both players are AI and stake is \u20a910 (Amt = 0) | How demanding the AI is as a responder in the pure AI-vs-AI baseline |
-| **Amt** | How MAO changes as stake increases | Negative = accepts a smaller share at higher stakes — more rational |
-| **P Human** | Change in MAO when the Proposer is human | Does the model demand more or less when a human is making the offer? |
-| **R Human** | Change in MAO when the Responder is human (AI is advising a human) | Positive = tells humans to demand a higher minimum |
-| **Amt \u00d7 P Human** | Does the stake effect on MAO differ when Proposer is human? | Whether "be rational at higher stakes" changes with proposer type |
-| **Amt \u00d7 R Human** | Does the stake effect on MAO differ when Responder is human? | Negative = AI advises humans to lower threshold more sharply at higher stakes |
-| **P Human \u00d7 R Human** | Extra adjustment when both players are human | AI-specific behavior in human-vs-human scenario |
-| **Amt \u00d7 P Human \u00d7 R Human** | Triple interaction | How stake sensitivity in the human-vs-human case differs from all others |
+| **Constant** | Baseline MAO when both players are AI and stake = \u20a910 (Amt = 0) | How demanding the AI is in the pure AI-vs-AI baseline |
+| **Amt** | Change per 10\u00d7 increase in stake | Negative = accepts smaller shares at higher stakes — more rational |
+| **P Human** | Baseline change in MAO when Proposer is human (at Amt=0, R=AI) | Does the model demand more or less from a human proposer? |
+| **R Human** | Baseline change in MAO when Responder is human (at Amt=0, P=AI) | Positive = AI tells humans to demand a higher minimum |
+| **Amt \u00d7 P Human** | Does the stake effect change when Proposer is human? | Whether "be more rational at higher stakes" shifts with proposer type |
+| **Amt \u00d7 R Human** | Does the stake effect change when Responder is human? | Negative = AI advises humans to lower their threshold more at higher stakes |
+| **P Human \u00d7 R Human** | Extra shift when both players are human (at Amt=0) | AI-specific adjustment for the human-vs-human scenario |
+| **Amt \u00d7 P Human \u00d7 R Human** | Does the human-human adjustment change with stake? | Stake sensitivity specific to human-vs-human |
 """)
     st.info("""
 **Key findings to look for:**
-- **Amt < 0** (significant): the model accepts lower shares at higher stakes \u2713
-- **R Human > 0** (significant): the model tells humans to demand more — stricter fairness norms when advising
+- **Amt < 0** (significant): AI accepts lower shares at higher stakes \u2713
+- **R Human > 0** (significant): AI tells humans to demand more — stricter fairness norms when advising \u2713
 - **Constant near 0**: close to the rational benchmark as a responder in the AI-vs-AI baseline
+\n\u26a0\ufe0f The coefficient on P_Human alone is only the effect *at \u20a910 with an AI responder*. See the marginal effects tables below for the full picture.
 """)
 
-    st.markdown("**Coefficient plot — Responder** *(error bars = 95% CI; bars crossing 0 are not significant)*")
-    selected_model_11 = st.selectbox("Select model", MODELS, key="coefplot_responder_tab2")
-    res = res11[selected_model_11]
+    st.markdown("**Coefficient plot** *(error bars = 95% CI; bars crossing 0 are not significant)*")
+    sel11_plot = st.selectbox("Select model", MODELS, key="coefplot_responder")
+    res = res11[sel11_plot]
     vars_to_plot = [v for v in VAR_LABELS_FULL if v != "Intercept" and v in res.params]
     coefs = [res.params[v] for v in vars_to_plot]
     ci_lo = [res.conf_int().loc[v, 0] for v in vars_to_plot]
@@ -616,58 +588,19 @@ with tab2:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=coefs, y=labels, mode="markers",
-        marker=dict(size=10, color=COLORS[selected_model_11]),
+        marker=dict(size=10, color=COLORS[sel11_plot]),
         error_x=dict(type="data",
                      arrayminus=[c - l for c, l in zip(coefs, ci_lo)],
                      array=[h - c for c, h in zip(coefs, ci_hi)],
-                     color=COLORS[selected_model_11])
+                     color=COLORS[sel11_plot])
     ))
     fig.add_vline(x=0, line_dash="dot", line_color="gray")
     fig.update_layout(xaxis_title="Coefficient", yaxis_title="",
                       margin=dict(t=10, b=10), height=340)
-    st.plotly_chart(fig, use_container_width=True, key="chart_coef_responder_t2")
-
-    # ── Marginal effects (MAO) ────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### \U0001f522 Total marginal effect of P_Human")
-    st.markdown("""
-> **ME(P_Human)** = \u03b2(P_Human) + \u03b2(Amt\u00d7P_Human)\u00b7Amt + \u03b2(P_Human\u00d7R_Human)\u00b7R_Human + \u03b2(Amt\u00d7P_Human\u00d7R_Human)\u00b7Amt\u00b7R_Human
-""")
-    sel11 = st.selectbox("Select model for marginal effects", MODELS, key="me11")
-    r11   = res11[sel11]
-
-    me_rows3 = []
-    for r_val, r_label in [(0, "AI Responder"), (1, "Human Responder")]:
-        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
-            me, se, pv = me_P(r11, amt, r_val)
-            s = "***" if pv < 0.001 else "**" if pv < 0.01 else "*" if pv < 0.05 else ""
-            me_rows3.append({
-                "Responder type": r_label,
-                "Stake":          slabel,
-                "ME of P_Human":  f"{me:+.4f}{s}",
-                "Std. Error":     f"({se:.4f})",
-                "p-value":        f"{pv:.3f}",
-                "Interpretation": "AI advises humans to demand more" if me > 0 else "AI advises humans to accept lower"
-            })
-    st.dataframe(pd.DataFrame(me_rows3), use_container_width=True, hide_index=True)
+    st.plotly_chart(fig, use_container_width=True, key="chart_coef_responder")
 
     st.markdown("---")
-    st.markdown("#### \U0001f522 Total marginal effect of R_Human")
-    st.markdown("""
-> **ME(R_Human)** = \u03b2(R_Human) + \u03b2(Amt\u00d7R_Human)\u00b7Amt + \u03b2(P_Human\u00d7R_Human)\u00b7P_Human + \u03b2(Amt\u00d7P_Human\u00d7R_Human)\u00b7Amt\u00b7P_Human
-""")
-    me_rows4 = []
-    for p_val, p_label in [(0, "AI Proposer"), (1, "Human Proposer")]:
-        for amt, slabel in zip(AMT_VALS, AMT_LABELS):
-            me, se, pv = me_R(r11, amt, p_val)
-            s = "***" if pv < 0.001 else "**" if pv < 0.01 else "*" if pv < 0.05 else ""
-            me_rows4.append({
-                "Proposer type":  p_label,
-                "Stake":          slabel,
-                "ME of R_Human":  f"{me:+.4f}{s}",
-                "Std. Error":     f"({se:.4f})",
-                "p-value":        f"{pv:.3f}",
-                "Interpretation": "Higher acceptance threshold when advising humans" if me > 0 else "Lower threshold when advising humans"
-            })
-    st.dataframe(pd.DataFrame(me_rows4), use_container_width=True, hide_index=True)
-    st.caption("Significance: * p<0.05  ** p<0.01  *** p<0.001. Standard errors via delta method (HC1).")
+    st.markdown("#### \U0001f4ca Marginal effects (accounting for all interaction terms)")
+    st.markdown("Select a model to see the **total** effect of each player-type variable across all stake levels and opponent types.")
+    sel11_me = st.selectbox("Select model for marginal effects", MODELS, key="me11")
+    show_me_tables(res11[sel11_me], dep="mao")
